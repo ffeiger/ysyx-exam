@@ -1,0 +1,234 @@
+/***************************************************************************************
+* Copyright (c) 2014-2022 Zihao Yu, Nanjing University
+*
+* NEMU is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2.
+* You may obtain a copy of Mulan PSL v2 at:
+*          http://license.coscl.org.cn/MulanPSL2
+*
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+* EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+* MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+*
+* See the Mulan PSL v2 for more details.
+***************************************************************************************/
+
+#include "local-include/reg.h"
+#include <cpu/cpu.h>
+#include <cpu/ifetch.h>
+#include <cpu/decode.h>
+#include <elf.h>
+
+#define R(i) gpr(i)
+#define Mr vaddr_read
+#define Mw vaddr_write
+
+enum {
+  TYPE_I, TYPE_U, TYPE_S, TYPE_J, TYPE_R, TYPE_B, TYPE_SI,
+  TYPE_N, // none
+};
+
+#define src1R() do { *src1 = R(rs1); } while (0)
+#define src2R() do { *src2 = R(rs2); } while (0)
+#define src2I() do { *src2 = BITS(i,31,20); } while (0)
+#define immI() do { *imm = SEXT(BITS(i, 31, 20), 12); } while(0)
+#define immU() do { *imm = SEXT(BITS(i, 31, 12), 20) << 12; } while(0)
+#define immS() do { *imm = (SEXT(BITS(i, 31, 25), 7) << 5) | BITS(i, 11, 7); } while(0)
+#define immJ() do { *imm = (SEXT(BITS(i, 31, 31), 1) << 20) | BITS(i, 19, 12) << 12 | BITS(i, 20, 20) << 11 | BITS(i, 30, 21) << 1 | 0; } while(0)
+#define immB() do { *imm = (SEXT(BITS(i, 31, 31), 1) << 12) | BITS(i, 7, 7) << 11 | BITS(i, 30, 25) << 5 | BITS(i, 11, 8) << 1 | 0; } while(0)
+
+static void decode_operand(Decode *s, int *dest, int *shamt,word_t *src1, word_t *src2, word_t *imm, int type) {
+  uint32_t i = s->isa.inst.val;
+  int rd  = BITS(i, 11, 7);
+  int rs1 = BITS(i, 19, 15);
+  int rs2 = BITS(i, 24, 20);
+  *shamt = BITS(i, 25, 20);
+  *dest = rd;
+  switch (type) {
+    case TYPE_I: src1R(); src2I(); immI(); break;
+    case TYPE_U:                   immU(); break;
+    case TYPE_S: src1R(); src2R(); immS(); break;
+    case TYPE_J:                   immJ(); break;
+    case TYPE_R: src1R(); src2R();         break;
+    case TYPE_B: src1R(); src2R(); immB(); break;
+    case TYPE_SI:src1R();                  break;
+  }
+}
+
+enum{
+    CSRRW, CSRRS
+};
+
+static void CSR(word_t dest, word_t src1, word_t src2, int op)
+{
+    int csr = 0;
+    switch(src2)
+    {
+    case 0x341:
+        csr = MEPC;
+        break;
+    case 0x300:
+        csr = MSTATUS;
+        break;
+    case 0x342:
+        csr = MCAUSE;
+        break;
+    case 0x305:
+        csr = MTVEC;
+        break;
+    default:
+        assert(0);
+    }
+
+    word_t t = cpu.csr[csr];
+    switch(op)
+    {
+    case CSRRW:
+        cpu.csr[csr] = src1;
+        break;
+    case CSRRS:
+        cpu.csr[csr] = t | src1;
+        break;
+    default:
+        assert(0);        
+    }
+    if(dest!=0)
+      R(dest) = t;   
+}
+
+static int decode_exec(Decode *s,char (*ftrace)[2000]) {
+  uint32_t inst = s->isa.inst.val;
+  int dest = 0;
+  int shamt= 0;
+  word_t src1 = 0, src2 = 0, imm = 0;
+  s->dnpc = s->snpc;
+
+#define INSTPAT_INST(s) ((s)->isa.inst.val)
+#define INSTPAT_MATCH(s, name, type, ... /* execute body */ ) { \
+  decode_operand(s, &dest, &shamt, &src1, &src2, &imm, concat(TYPE_, type)); \
+  __VA_ARGS__ ; \
+}
+
+  INSTPAT_START();
+  INSTPAT("??????? ????? ????? ??? ????? 00101 11", auipc  , U, R(dest) = s->pc + imm);
+  INSTPAT("??????? ????? ????? ??? ????? 01101 11", lui    , U, R(dest) = SEXT(imm,32));
+  INSTPAT("??????? ????? ????? 011 ????? 00000 11", ld     , I, R(dest) = Mr(src1 + imm, 8));
+  INSTPAT("??????? ????? ????? 000 ????? 00000 11", lb     , I, R(dest) = SEXT(Mr(src1 + imm, 1),8));
+  INSTPAT("??????? ????? ????? 100 ????? 00000 11", lbu    , I, R(dest) = UEXT(Mr(src1 + imm, 1),8));
+  INSTPAT("??????? ????? ????? 001 ????? 00000 11", lh     , I, R(dest) = SEXT(Mr(src1 + imm, 2),16));
+  INSTPAT("??????? ????? ????? 101 ????? 00000 11", lhu    , I, R(dest) = UEXT(Mr(src1 + imm, 2),16));
+  INSTPAT("??????? ????? ????? 010 ????? 00000 11", lw     , I, R(dest) = SEXT(Mr(src1 + imm, 4),32));
+  INSTPAT("??????? ????? ????? 110 ????? 00000 11", lwu     , I, R(dest) = UEXT(Mr(src1 + imm, 4),32));
+  INSTPAT("??????? ????? ????? 000 ????? 00100 11", addi   , I, R(dest) = (signed long)src1 + (signed long)imm);
+  INSTPAT("??????? ????? ????? 111 ????? 00100 11", andi   , I, R(dest) = src1 & imm);
+  INSTPAT("??????? ????? ????? 000 ????? 00110 11", addiw  , I, R(dest) = SEXT(BITS(src1+imm,31,0),32));
+  INSTPAT("??????? ????? ????? 110 ????? 00100 11", ori    , I, R(dest) = src1 | imm);
+  INSTPAT("??????? ????? ????? 100 ????? 00100 11", xori   , I, R(dest) = src1 ^ imm);
+  INSTPAT("0000000 ????? ????? 011 ????? 01100 11", sltu   , R, R(dest) = (uint64_t)src1 < (uint64_t)src2);
+  INSTPAT("0000000 ????? ????? 010 ????? 01100 11", slt    , R, R(dest) = (signed long)src1 < (signed long)src2);
+  INSTPAT("0000000 ????? ????? 010 ????? 00100 11", slti   , I, R(dest) = (signed long)src1 < (signed long)imm);
+  INSTPAT("??????? ????? ????? 011 ????? 00100 11", sltiu  , I, R(dest) = (uint64_t)src1 < (uint64_t)imm);
+  INSTPAT("??????? ????? ????? 011 ????? 01000 11", sd     , S, Mw(src1 + imm, 8, src2));
+  INSTPAT("??????? ????? ????? 000 ????? 01000 11", sb     , S, Mw(src1 + imm, 1, src2));
+  INSTPAT("??????? ????? ????? 001 ????? 01000 11", sh     , S, Mw(src1 + imm, 2, src2));
+  INSTPAT("??????? ????? ????? 010 ????? 01000 11", sw     , S, Mw(src1 + imm, 4, src2));
+  INSTPAT("??????? ????? ????? ??? ????? 11011 11", jal    , J, R(dest) = s->pc + 4, s->dnpc = s->pc + imm);
+  INSTPAT("??????? ????? ????? ??? ????? 11001 11", jalr   , I, R(dest) = s->pc + 4, s->dnpc = src1 + imm);
+  INSTPAT("0000000 ????? ????? 000 ????? 01100 11", add    , R, R(dest) = src1 + src2);
+  INSTPAT("0000000 ????? ????? 111 ????? 01100 11", and    , R, R(dest) = src1 & src2);
+  INSTPAT("0000000 ????? ????? 110 ????? 01100 11", or     , R, R(dest) = src1 | src2);
+  INSTPAT("0000000 ????? ????? 100 ????? 01100 11", xor     , R, R(dest) = src1 ^ src2);
+  INSTPAT("0000000 ????? ????? 000 ????? 01110 11", addw   , R, R(dest) = SEXT(BITS(src1+src2,31,0),32));
+  INSTPAT("0100000 ????? ????? 000 ????? 01110 11", subw   , R, R(dest) = SEXT(BITS(src1-src2,31,0),32));
+  INSTPAT("0100000 ????? ????? 000 ????? 01100 11", sub    , R, R(dest) = src1 - src2);
+  INSTPAT("0000001 ????? ????? 000 ????? 01100 11", mul    , R, R(dest) = src1 * src2);
+  INSTPAT("0000001 ????? ????? 000 ????? 01110 11", mulw   , R, R(dest) = SEXT(BITS(BITS(src1,31,0)*BITS(src2,31,0),31,0),32));
+  INSTPAT("0000001 ????? ????? 100 ????? 01110 11", divw   , R, R(dest) = SEXT(BITS(BITS(src1,31,0)/BITS(src2,31,0),31,0),32));
+  INSTPAT("0000001 ????? ????? 101 ????? 01110 11", divuw   , R, R(dest) = SEXT(BITS((unsigned)BITS(src1,31,0)/(unsigned)BITS(src2,31,0),31,0),32));
+  INSTPAT("0000001 ????? ????? 101 ????? 01100 11", divu   , R, R(dest) = src1/src2);
+  INSTPAT("0000001 ????? ????? 110 ????? 01110 11", remw   , R, R(dest) = SEXT(BITS(BITS(src1,31,0)%BITS(src2,31,0),31,0),32));
+  INSTPAT("0000001 ????? ????? 111 ????? 01110 11", remuw   , R, R(dest) = SEXT(BITS((unsigned)BITS(src1,31,0)%(unsigned)BITS(src2,31,0),31,0),32));
+  INSTPAT("0000001 ????? ????? 111 ????? 01100 11", remu   , R, R(dest) = src1%src2);
+  INSTPAT("0000001 ????? ????? 110 ????? 01100 11", rem   , R, R(dest) = (signed)src1%(signed)src2);
+  INSTPAT("0000000 ????? ????? 101 ????? 01100 11", srl    , R, R(dest) = src1 >> BITS(src2,5,0));
+  INSTPAT("0000000 ????? ????? 001 ????? 01100 11", sll    , R, R(dest) = src1 << BITS(src2,5,0));
+  INSTPAT("0000000 ????? ????? 001 ????? 01110 11", sllw   , R, R(dest) = SEXT(BITS(src1,31,0) << BITS(src2,4,0),32));
+  INSTPAT("0000000 ????? ????? 101 ????? 01110 11", srlw   , R, R(dest) = SEXT(BITS(src1,31,0) >> BITS(src2,4,0),32));
+  INSTPAT("0100000 ????? ????? 101 ????? 01110 11", sraw   , R, R(dest) = SEXT(BITS((signed)BITS(src1,31,0) >> BITS(src2,4,0),31,0),32));
+  INSTPAT("0000000 ????? ????? 001 ????? 00110 11", slliw  , R, R(dest) = SEXT(BITS(src1 << BITS(inst, 24, 20),31,0),32));
+  INSTPAT("0100000 ????? ????? 101 ????? 00110 11", sraiw  , R, R(dest) = SEXT(BITS((signed)BITS(src1,31,0) >> BITS(inst, 24, 20),31,0),32));
+  INSTPAT("0000000 ????? ????? 101 ????? 00110 11", srliw  , R, R(dest) = SEXT(BITS(BITS(src1,31,0) >> BITS(inst, 24, 20),31,0),32));
+  INSTPAT("??????? ????? ????? 000 ????? 11000 11", beq    , B, s->dnpc = ((signed long)src1==(signed long)src2)? s->pc+imm:s->pc+4);
+  INSTPAT("??????? ????? ????? 001 ????? 11000 11", bne    , B, s->dnpc = ((signed long)src1!=(signed long)src2)? s->pc+imm:s->pc+4);
+  INSTPAT("??????? ????? ????? 100 ????? 11000 11", blt    , B, s->dnpc = ((signed long)src1<(signed long)src2)? s->pc+imm:s->pc+4);
+  INSTPAT("??????? ????? ????? 110 ????? 11000 11", bltu   , B, s->dnpc = (src1<src2)? s->pc+imm:s->pc+4);
+  INSTPAT("??????? ????? ????? 111 ????? 11000 11", bgeu   , B, s->dnpc = (src1>=src2)? s->pc+imm:s->pc+4);
+  INSTPAT("??????? ????? ????? 101 ????? 11000 11", bge    , B, s->dnpc = ((signed long)src1>=(signed long)src2)? s->pc+imm:s->pc+4);
+  INSTPAT("010000 ?????? ????? 101 ????? 00100 11", srai   , SI, R(dest) = (signed long)src1 >> shamt);
+  INSTPAT("000000 ?????? ????? 101 ????? 00100 11", srli   , SI, R(dest) = src1 >> shamt);
+  INSTPAT("000000 ?????? ????? 001 ????? 00100 11", slli   , SI, R(dest) = src1 << shamt);
+
+  INSTPAT("0000000 00000 00000 000 00000 11100 11", ecall  , I, s->dnpc = isa_raise_intr(11, s->pc));
+  INSTPAT("??????? ????? ????? 001 ????? 11100 11", csrrw  , I, CSR(dest, src1, src2, CSRRW));
+  INSTPAT("??????? ????? ????? 010 ????? 11100 11", csrrs  , I, CSR(dest, src1, src2, CSRRS));
+  INSTPAT("0011000 00010 00000 000 00000 11100 11", mret   , R, s->dnpc = cpu.csr[MEPC]);
+
+  INSTPAT("0000000 00001 00000 000 00000 11100 11", ebreak , N, NEMUTRAP(s->pc, R(10))); // R(10) is $a0
+  INSTPAT("??????? ????? ????? ??? ????? ????? ??", inv    , N, INV(s->pc));
+  INSTPAT_END();
+
+  R(0) = 0; // reset $zero to 0
+  
+  #ifdef CONFIG_FTRACE
+  extern int num_of_entry;
+  extern char str[10000];
+  extern Elf64_Sym *sym;
+  char func_name[100]={0};
+  char blank[1000]={0};
+  extern int idx_of_ftrace;
+  extern int call_blank;
+  extern int ret_blank;
+
+  if(BITS(inst,6,0)==111||BITS(inst,6,0)==103){     
+    for(int i=0;i<num_of_entry;i++)
+    {
+      if(sym[i].st_info==18 && s->dnpc >=sym[i].st_value && s->dnpc <sym[i].st_value+sym[i].st_size)
+      {
+        strcpy(func_name,str+sym[i].st_name);
+      } 
+    }
+
+    if(BITS(inst,31,16)!=0)
+    {
+      for(int i=0;i<call_blank;i++)
+        blank[i]=' ';
+      if(idx_of_ftrace<1000)
+      {
+        sprintf(ftrace[idx_of_ftrace++],"0x%08lx:%s call[%s@0x%08lx]\n",s->pc,blank,func_name,s->dnpc);         
+        call_blank++;
+        ret_blank++;
+      }
+    }
+    else
+    {
+      for(int i=0;i<ret_blank;i++)
+        blank[i]=' ';
+
+      ret_blank--;
+      call_blank--;
+      if(idx_of_ftrace<1000)
+      sprintf(ftrace[idx_of_ftrace++],"0x%08lx:%sret[%s@0x%08lx]\n",s->pc,blank,func_name,s->dnpc);  
+      ret_blank--;
+      call_blank--;
+    }
+    memset(func_name,0,strlen(func_name));
+    memset(blank+1,0,strlen(blank));
+  }
+ #endif
+  return 0;
+}
+
+int isa_exec_once(Decode *s,char (*ftrace)[2000]) {
+  s->isa.inst.val = inst_fetch(&s->snpc, 4);
+  return decode_exec(s,ftrace);
+}

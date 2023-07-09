@@ -29,6 +29,7 @@ int atoi(const char* nptr) {
   return x;
 }
 
+
 char *hbrk ;
 int first_malloc=0;
 
@@ -45,7 +46,6 @@ void *malloc(size_t size) {
   for (uint64_t *p = (uint64_t *)old; p != (uint64_t *)hbrk; p ++) {
     *p = 0;
   }
-  //assert((uintptr_t)hbrk - (uintptr_t)heap.start <= setting->mlim);
   return old;
 #endif
   return NULL;
@@ -53,5 +53,6 @@ void *malloc(size_t size) {
 
 void free(void *ptr) {
 }
+
 
 #endif

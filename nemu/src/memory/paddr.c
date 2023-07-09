@@ -37,6 +37,7 @@ static void pmem_write(paddr_t addr, int len, word_t data) {
   host_write(guest_to_host(addr), len, data);
 }
 
+
 static void out_of_bound(paddr_t addr) {
   panic("address = " FMT_PADDR " is out of bound of pmem [" FMT_PADDR ", " FMT_PADDR "] at pc = " FMT_WORD,
       addr, PMEM_LEFT, PMEM_RIGHT, cpu.pc);
@@ -56,6 +57,7 @@ void init_mem() {
 #endif
   Log("physical memory area [" FMT_PADDR ", " FMT_PADDR "]", PMEM_LEFT, PMEM_RIGHT);
 }
+
 
 char mtrace[500];
 
@@ -86,5 +88,12 @@ void paddr_write(paddr_t addr, int len, word_t data) {
 
   if (likely(in_pmem(addr))) { pmem_write(addr, len, data); return; }
   IFDEF(CONFIG_DEVICE, mmio_write(addr, len, data); return);
+  /*
+  if(addr>0xa1000000)
+  {
+    virtual_vmem[addr-0xa1000000]=data;
+    return;
+  }
+  */
   out_of_bound(addr);
 }

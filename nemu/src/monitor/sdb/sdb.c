@@ -20,9 +20,11 @@
 #include "sdb.h"
 #include <memory/vaddr.h>
 #include <string.h>
+#include <stdio.h>
 
 
 static int is_batch_mode = false;
+extern void open_difftest();
 
 void init_regex();
 void init_wp_pool();
@@ -141,6 +143,28 @@ static int cmd_p(char* args){
 
 static int cmd_help(char *args);
 
+int is_difftest_open=0;
+static int cmd_detach(char* args){
+  is_difftest_open = 0;
+  return 0;
+}
+
+static int cmd_attach(char* args){
+  is_difftest_open = 1;
+  //open_difftest();
+  return 0;
+}
+
+static int cmd_save(char* args){
+  printf("not implemented\n");
+  assert(0);  
+}
+
+static int cmd_load(char* args){
+  printf("not implemented\n");
+  assert(0);  
+}
+
 static struct {
   const char *name;
   const char *description;
@@ -154,7 +178,11 @@ static struct {
   { "x", "Scan the memory",cmd_x},
   { "w", "Set watchpoint",cmd_w},
   { "d", "delete watchpoint",cmd_d},
-  { "p", "evaluate the expression",cmd_p}
+  { "p", "evaluate the expression",cmd_p},
+  { "detach", "exit difftest", cmd_detach},
+  { "attach", "open difftest", cmd_attach},
+  { "save", "save the state", cmd_save},
+  { "load", "load the state", cmd_load}
 
   /* TODO: Add more commands */
 

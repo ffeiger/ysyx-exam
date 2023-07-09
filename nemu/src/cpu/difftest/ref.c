@@ -46,19 +46,27 @@ void difftest_memcpy(paddr_t addr, void *buf, size_t n, bool direction) {
   }
 }
 
+//extern uint8_t virtual_vmem;
 extern CPU_state cpu;
-void difftest_regcpy(void *dut, bool direction) {
+void difftest_regcpy(void *dut, bool direction, bool device) {
    uint64_t* ctx = (uint64_t*)dut;
-  
+  // uint64_t* pointer = (uint64_t *) virtual_vmem;
   if (direction == DIFFTEST_TO_DUT) {
-    for (int i = 0; i < 32; i++) {
+    int i;
+    for (i = 0; i < 32; i++) {
       ctx[i] = cpu.gpr[i];
     }
+    ctx[i]=cpu.pc;
+  /*
+    for(i=0;i<60000;i++)
+      ctx[i+33] = pointer[i];*/
   } 
   else {
     for (int i = 0; i < 32; i++) {
       cpu.gpr[i]=ctx[i] ;
   }
+    if(device)
+      cpu.pc += 4;
   }
 }
 

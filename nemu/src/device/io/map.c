@@ -65,6 +65,8 @@ word_t map_read(paddr_t addr, int len, IOMap *map) {
 void map_write(paddr_t addr, int len, word_t data, IOMap *map) {
   assert(len >= 1 && len <= 8);
   check_bound(map, addr);
+  //if(addr>=0xa1000000 &&data!=0)
+    //printf("%016lx len:%d\n",data,len);
   IFDEF(CONFIG_DTRACE,printf("pc:%016lx , write addr:%016x , device:%s\n",cpu.pc,addr,map->name));
   paddr_t offset = addr - map->low;
   host_write(map->space + offset, len, data);

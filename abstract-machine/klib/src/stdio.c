@@ -7,130 +7,209 @@
 
 #if !defined(__ISA_NATIVE__) || defined(__NATIVE_USE_KLIB__)
 
-int printf(const char *fmt, ...) {
-  va_list ap;
-  va_start(ap, fmt);
-    while (*fmt) {
-        if (*fmt == '%') {
-            fmt++;
-            switch (*fmt) {
-            case '0':{
-              if(fmt[1]=='2' && fmt[2]=='d')
-              {
-                int num = va_arg(ap, int);
-                if (num < 0) {
-                    putch('-');
-                    num = -num;
-                }
-                char str[20];
-                int i = 0;
-                do {
-                    str[i++] = num % 10 + '0';
-                    num /= 10;
-                } while (num);
-                for(int zero=2-i;zero>0;zero--)
-                  printf("0");
-                while (i > 0) {
-                    i--;
-                    putch(str[i]);
-                }
-                fmt+=2;
-                break;
-              }
-              else{
-                putch(*fmt);
-                break;
-              }
-            }
-            case 'c':
-                putch(va_arg(ap, int));
-                break;
-            case 'd': {
-                int num = va_arg(ap, int);
-                if (num < 0) {
-                    putch('-');
-                    num = -num;
-                }
-                char str[20];
-                int i = 0;
-                do {
-                    str[i++] = num % 10 + '0';
-                    num /= 10;
-                } while (num);
-                while (i > 0) {
-                    i--;
-                    putch(str[i]);
-                }
-                break;
-            }
-            case 's': {
-                char* str = va_arg(ap, char*);
-                while (*str) {
-                    putch(*str);
-                    str++;
-                }
-                break;
-            }
-            default:
-                putch(*fmt);
-                break;
-            }
-        } else {
-            putch(*fmt);
-        }
-        fmt++;
+int printf(const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    char out[4096];
+    int length = vsprintf(out, fmt, ap);
+    for (int i = 0; i < length; i++)
+    {
+        putch(out[i]);
     }
     va_end(ap);
-  return 0;
+    return length;
 }
 
-int vsprintf(char *out, const char *fmt, va_list ap) {
-  panic("Not implemented");
+int vsprintf(char *out, const char *fmt, va_list ap)
+{
+    return vsnprintf(out, -1, fmt, ap);
 }
 
-int sprintf(char *out, const char *fmt, ...) {
-  va_list ap;
-  va_start(ap,fmt);
-  int i=0,j=0;
-  while(fmt[i]!='\0')
-  {
-    if(fmt[i]=='%'&&fmt[i+1]=='s'){
-      char *s=va_arg(ap,char *);
-      for(int m=0;m<strlen(s);m++)
-        out[j+m]=s[m];
-      j+=strlen(s);
-      i+=2;
+int sprintf(char *out, const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    int length = vsprintf(out, fmt, ap);
+    va_end(ap);
+    return length;
+}
+
+int snprintf(char *out, size_t n, const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    int length = vsnprintf(out, n, fmt, ap);
+    va_end(ap);
+    return length;
+}
+
+int vsnprintf(char *out, size_t n, const char *fmt, va_list ap)
+{
+    int pos = 0;
+    for (; *fmt != '\0'; fmt++)
+    {
+        // add to out[] directly until see %
+        while (*fmt != '%' && *fmt != '\0')
+        {
+            out[pos++] = *fmt++;
+            if (pos > n)
+            {
+                return n;
+            }
+        }
+
+        if (*fmt == '%')
+        {
+            fmt++;
+        }
+        else if (*fmt == '\0')
+        {
+            break;
+        }
+
+        char padding = ' ';
+        if (*fmt == '0')
+        {
+            padding = '0';
+            fmt++;
+        }
+
+        // width
+        int width = 0;
+        while (*fmt >= '0' && *fmt <= '9')
+        {
+            width = width * 10 + *fmt++ - '0';
+        }
+
+        switch (*fmt)
+        {
+        case 's':
+        {
+            char *s = va_arg(ap, char *);
+            while (*s != '\0')
+            {
+                out[pos++] = *s++;
+                if (pos > n)
+                {
+                    return n;
+                }
+            }
+            break;
+        }
+
+        case 'd':
+        {
+            int d = va_arg(ap, int);
+            if (d < 0)
+            {
+                d = -d;
+                out[pos++] = '-';
+                if (pos > n)
+                {
+                    return n;
+                }
+            }
+            char num[20] = {0};
+            int rem = 0;
+            int length = 0;
+
+            do
+            {
+                rem = d % 10;
+                d = d / 10;
+                num[length++] = rem + '0';
+            } while (d > 0);
+
+            while (length < width)
+            {
+                out[pos++] = padding;
+                width--;
+                if (pos > n)
+                {
+                    return n;
+                }
+            }
+
+            length--;
+            for (; length >= 0; length--)
+            {
+                out[pos++] = num[length];
+                if (pos > n)
+                {
+                    return n;
+                }
+            }
+
+            break;
+        }
+
+        case 'p':
+        case 'x':
+        {
+            uint64_t d = va_arg(ap, uint64_t);
+            char num[20] = {0};
+            int rem = 0;
+            int length = 0;
+
+            do
+            {
+                rem = d % 16;
+                d = d / 16;
+                if (rem <= 9)
+                {
+                    num[length++] = rem + '0';
+                }
+                else
+                {
+                    num[length++] = rem - 10 + 'a';
+                }
+
+            } while (d > 0);
+
+            while (length < width)
+            {
+                out[pos++] = padding;
+                width--;
+                if (pos > n)
+                {
+                    return n;
+                }
+            }
+
+            out[pos++] = '0';
+            if (pos > n)
+            {
+                return n;
+            }
+
+            out[pos++] = 'x';
+            if (pos > n)
+            {
+                return n;
+            }
+
+            length--;
+            for (; length >= 0; length--)
+            {
+                out[pos++] = num[length];
+                if (pos > n)
+                {
+                    return n;
+                }
+            }
+
+            break;
+        }
+        }
     }
-    else if(fmt[i]=='%'&&fmt[i+1]=='d'){
-      int num=va_arg(ap,int);
-      int len=0;
-      int tmp=num;
-      while(num)
-      {
-        num/=10;
-        len++;
-      }
-      for(int n=j+len-1;n>=j;n--)
-      {
-        out[n]=tmp%10+'0';
-        tmp=tmp/10;
-      }
-      j+=len;
-      i+=2;
+
+    if (pos > n)
+    {
+        return n;
     }
-    else
-       out[j++]=fmt[i++];
-  }
-  out[j]='\0';
-  return 0;
-}
-
-int snprintf(char *out, size_t n, const char *fmt, ...) {
-  panic("Not implemented");
-}
-
-int vsnprintf(char *out, size_t n, const char *fmt, va_list ap) {
-  panic("Not implemented");
+    out[pos] = '\0';
+    return pos;
 }
 
 #endif

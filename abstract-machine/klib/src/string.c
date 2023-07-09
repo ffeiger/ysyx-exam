@@ -99,11 +99,9 @@ void *memset(void *s, int c, size_t n) {
 }
 
 void *memmove(void *dst, const void *src, size_t n) {
-  //assert(dst && src);
 	void* ret = dst;
 	if (src > dst)
 	{
-		//顺顺序
 		while (n--)
 		{
 			*(char*)dst = *(char*)src;
@@ -113,7 +111,6 @@ void *memmove(void *dst, const void *src, size_t n) {
 	}
 	else
 	{
-		//逆顺序
 		while (n--)
 		{
 			*((char*)dst+n) = *((char*)src + n);
@@ -123,7 +120,6 @@ void *memmove(void *dst, const void *src, size_t n) {
 }
 
 void *memcpy(void *out, const void *in, size_t n) {
-  //assert(out && in);
 	void* ret = out;
   while(n--)
   {

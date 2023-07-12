@@ -16,7 +16,7 @@ LDFLAGS   += -T $(AM_HOME)/scripts/linker.ld --defsym=_pmem_start=0x80000000 --d
 LDFLAGS   += --gc-sections -e _start 
 CFLAGS += -DMAINARGS=\"$(mainargs)\"
 
-REF := /home/ffff/ysyx-workbench/nemu/build/riscv64-nemu-interpreter-so
+REF := $(NEMU_HOME)/build/riscv64-nemu-interpreter-so
 NPCFLAGS += --d=$(REF)
 
 .PHONY: $(AM_HOME)/am/src/riscv/npc/trm.c
@@ -26,6 +26,6 @@ image: $(IMAGE).elf
 	@echo + OBJCOPY "->" $(IMAGE_REL).bin
 	@$(OBJCOPY) -S --set-section-flags .bss=alloc,contents -O binary $(IMAGE).elf $(IMAGE).bin
 
-NPC_HOME := ~/ysyx-workbench/npc
+NPC_HOME := $(NEMU_HOME)/../npc
 run: image
 	$(MAKE) -C $(NPC_HOME)  ISA=$(ISA) sim ARGS="$(NPCFLAGS)" IMG=$(IMAGE).bin

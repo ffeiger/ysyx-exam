@@ -282,7 +282,7 @@ int main(int argc, char *argv[]) {
   for(int i=0;i<26;i++)//26
     step_and_dump_wave();
 
-  init_difftest(diff_so_file, img_size, difftest_port);
+  //init_difftest(diff_so_file, img_size, difftest_port);
 
   sdb_mainloop();
 

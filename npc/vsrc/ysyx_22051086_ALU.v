@@ -8,15 +8,13 @@ module ysyx_22051086_ALU (
     output [63:0] alu_res,
     output        alu_busy 
 );
-
 /* verilator lint_off UNUSED */
 wire [63:0] add_sub_result; 
-wire [63:0] sltu_result;
 wire [63:0] and_result;
 wire [63:0] or_result;
 wire [63:0] xor_result;
 wire [63:0] sll_result; 
-wire [127:0] sr_result; 
+wire [63:0] sr_result; 
 wire [31:0] sllw_result; 
 wire [63:0] srw_result;  
 wire [63:0] slt_result;

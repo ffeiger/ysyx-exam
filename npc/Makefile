@@ -20,10 +20,9 @@ CSRCS = $(shell find $(abspath ./csrc) -name "*.c" -or -name "*.cc" -or -name "*
 # rules for verilator
 INCFLAGS = $(addprefix -I, $(INC_PATH))
 CFLAGS += $(INCFLAGS) -DTOP_NAME="\"V$(TOPNAME)\""  -g
-LDFLAGS += $(shell llvm-config --cxxflags) -fPIE
 LDFLAGS += -fsanitize=address -lSDL2 -lSDL2_image
-#LDFLAGS += $(shell llvm-config --cxxflags) -fPIE
-LDFLAGS += $(shell llvm-config --libs)
+CFLAGS += $(shell llvm-config-11 --cxxflags) -fPIE
+LDFLAGS += $(shell llvm-config-11 --libs)
 
 
 

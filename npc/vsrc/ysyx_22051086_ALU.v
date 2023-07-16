@@ -11,7 +11,6 @@ module ysyx_22051086_ALU (
 
 /* verilator lint_off UNUSED */
 wire [63:0] add_sub_result; 
-wire [63:0] slt_result; 
 wire [63:0] sltu_result;
 wire [63:0] and_result;
 wire [63:0] or_result;

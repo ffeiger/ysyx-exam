@@ -2,11 +2,11 @@ mainmenu "NEMU Configuration Menu"
 
 choice 
   prompt "WATCHPOINTS"
-  default WATCHPOINT
-config WATCHPOINT
-  bool "Enable watchpoint checing"
+  default NO_WATCHPOINT
 config NO_WATCHPOINT
   bool "Disable watchpoint checking"
+config WATCHPOINT
+  bool "Enable watchpoint checing"
 endchoice
 
 choice
@@ -236,7 +236,7 @@ menu "Miscellaneous"
 choice
   depends on !TARGET_AM
   prompt "Host timer"
-  default TIMER_GETTIMEOFDAY
+  default TIMER_CLOCK_GETTIME
 config TIMER_GETTIMEOFDAY
   bool "gettimeofday"
 config TIMER_CLOCK_GETTIME

@@ -70,7 +70,9 @@ always @(*) begin
         end
         READ:
         begin
-            if(rvalid && rready && rlast)
+            if(arvalid && arready)
+                next_state = READ;
+            else if(rvalid && rready && rlast)
                 next_state = IDLE;
             else 
                 next_state = READ;

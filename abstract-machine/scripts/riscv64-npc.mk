@@ -18,6 +18,7 @@ CFLAGS += -DMAINARGS=\"$(mainargs)\"
 
 REF := $(NEMU_HOME)/build/riscv64-nemu-interpreter-so
 NPCFLAGS += --d=$(REF)
+NPCFLAGS += -b
 
 .PHONY: $(AM_HOME)/am/src/riscv/npc/trm.c
 

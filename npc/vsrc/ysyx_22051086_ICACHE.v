@@ -41,7 +41,7 @@ reg [`OFFSET_WIDTH-1:0] reg_offset;
 reg [`INDEX_WIDTH-1:0] reg_index;
 reg [`TAG_WIDTH-1:0] reg_tag;
 always @(posedge clk)begin
-    if(cur_state == IDLE && rwen)begin
+    if(rwen)begin
         reg_offset <= raddr[`OFFSET_LOC];
         reg_index <= raddr[`INDEX_LOC];
         reg_tag <= raddr[`TAG_LOC];
@@ -109,36 +109,51 @@ always @(*) begin
         end
         READ:
         begin
-            if(hit)                            
+            if(rwen)
+                next_state = READ;
+            else if(hit)                            
                 next_state = HIT;
             else 
                 next_state = MISS;
         end
         HIT:
         begin
-            next_state = IDLE;
+            if(rwen)
+                next_state = READ;
+            else
+                next_state = IDLE;
         end
         MISS:
         begin
-            if(axi_arvalid && axi_arready)
+            if(rwen)
+                next_state = READ;
+            else if(axi_arvalid && axi_arready)
                 next_state = REFILL;
             else
                 next_state = MISS;
         end
         REFILL:
         begin
-            if(axi_rlast)
+            if(rwen)
+                next_state = READ;
+            else if(axi_rlast)
                 next_state = HIT_AFTER_REFILL;
             else
                 next_state = REFILL;
         end
         HIT_AFTER_REFILL:
         begin
-            next_state = WAIT_READ_CACHE;
+            if(rwen)
+                next_state = READ;
+            else
+                next_state = WAIT_READ_CACHE;
         end
         WAIT_READ_CACHE:
         begin
-            next_state = IDLE;
+            if(rwen)
+                next_state = READ;
+            else
+                next_state = IDLE;
         end
         default:
             next_state = cur_state;
@@ -303,19 +318,35 @@ always @(posedge clk) begin   //valid  tag
         way2_valid <= 0;
         way3_valid <= 0;
     end
-    else if(cur_state == REFILL && rand_way == 2'b00)begin
+    else if(cur_state == REFILL && rand_way == 2'b00 && rwen)begin
+        way0_valid[reg_index] <= 0;
+        way0_tag[reg_index] <= reg_tag;
+    end
+    else if(cur_state == REFILL && rand_way == 2'b01 && rwen)begin
+        way1_valid[reg_index] <= 0;
+        way1_tag[reg_index] <= reg_tag;
+    end
+    else if(cur_state == REFILL && rand_way == 2'b10 && rwen)begin
+        way2_valid[reg_index] <= 0;
+        way2_tag[reg_index] <= reg_tag;
+    end
+    else if(cur_state == REFILL && rand_way == 2'b11 && rwen)begin
+        way3_valid[reg_index] <= 0;
+        way3_tag[reg_index] <= reg_tag;
+    end
+    else if(cur_state == REFILL && rand_way == 2'b00 && !rwen)begin
         way0_valid[reg_index] <= 1;
         way0_tag[reg_index] <= reg_tag;
     end
-    else if(cur_state == REFILL && rand_way == 2'b01)begin
+    else if(cur_state == REFILL && rand_way == 2'b01 && !rwen)begin
         way1_valid[reg_index] <= 1;
         way1_tag[reg_index] <= reg_tag;
     end
-    else if(cur_state == REFILL && rand_way == 2'b10)begin
+    else if(cur_state == REFILL && rand_way == 2'b10 && !rwen)begin
         way2_valid[reg_index] <= 1;
         way2_tag[reg_index] <= reg_tag;
     end
-    else if(cur_state == REFILL && rand_way == 2'b11)begin
+    else if(cur_state == REFILL && rand_way == 2'b11 && !rwen)begin
         way3_valid[reg_index] <= 1;
         way3_tag[reg_index] <= reg_tag;
     end

@@ -14,7 +14,6 @@ extern unsigned long int pmem[0X2000000];
 #define ARRLEN(arr) (int)(sizeof(arr) / sizeof(arr[0]))
 #define NR_CMD ARRLEN(cmd_table)
 
-
 VerilatedContext* contextp = NULL;
 VerilatedVcdC* tfp = NULL;
 
@@ -40,8 +39,8 @@ void step_and_dump_wave(){
   top->eval();
   top->clk=!top->clk;
   top->eval();
-  //contextp->timeInc(1);
-  //tfp->dump(contextp->time());
+ // contextp->timeInc(1);
+ // tfp->dump(contextp->time());
 }
 
  void disassemble(char *str, int size, uint64_t pc, uint8_t *code, int nbyte);
@@ -151,8 +150,13 @@ static char* rl_gets() {
   return line_read;
 }
 
-
+bool is_batch_mode;
 void sdb_mainloop() {
+  if (is_batch_mode) {
+    cmd_c(NULL);
+    return;
+  }
+
   for (char *str; (str = rl_gets()) != NULL; ) {
     char *str_end = str + strlen(str);
 
@@ -216,6 +220,9 @@ static long load_img() {
   return size;
 }
 
+void sdb_set_batch_mode() {
+  is_batch_mode = true;
+}
 static int parse_args(int argc, char *argv[]) {
   const struct option table[] = {
     {"batch"    , no_argument      , NULL, 'b'},
@@ -229,7 +236,7 @@ static int parse_args(int argc, char *argv[]) {
   int o;
   while ( (o = getopt_long(argc, argv, "-bhl:d:p:e:", table, NULL)) != -1) {
     switch (o) {
-      //case 'b': sdb_set_batch_mode(); break;
+      case 'b': sdb_set_batch_mode(); break;
       case 'p': sscanf(optarg, "%d", &difftest_port); break;
       case 'l': log_file = optarg; break;
       case 'd': diff_so_file = optarg; break;
@@ -254,7 +261,7 @@ void sim_init(){
   top = new Vysyx_22051086_top;
   //contextp->traceEverOn(true);
   //top->trace(tfp, 0);
-  //tfp->open("dump.vcd");
+ // tfp->open("dump.vcd");
   img_size = load_img();
 }
 
@@ -272,7 +279,7 @@ int main(int argc, char *argv[]) {
   init_device();
 
   top->clk=0;top->rst=1;step_and_dump_wave();top->rst=0;
-  for(int i=0;i<28;i++)//26
+  for(int i=0;i<26;i++)//26
     step_and_dump_wave();
 
   init_difftest(diff_so_file, img_size, difftest_port);
